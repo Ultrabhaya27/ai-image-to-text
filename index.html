@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image to Text</title>
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #2a1b3d 0%, #1b1b3d 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            color: white;
+        }
+
+        .title {
+            font-size: 4rem;
+            color: #e065ff;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: #ffffff99;
+            margin-bottom: 3rem;
+            text-align: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            position: relative;
+        }
+
+        .upload-zone:hover {
+            border-color: #e065ff;
+            background: rgba(224, 101, 255, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .result-area {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 1.5rem;
+            min-height: 300px;
+            color: #ffffff99;
+            position: relative;
+        }
+
+        .result-text {
+            color: white;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .placeholder-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff60;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .try-button {
+            background: linear-gradient(90deg, #e065ff 0%, #ff5e98 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            margin-top: 2rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .try-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .try-button:not(:disabled):hover {
+            transform: translateY(-2px);
+        }
+
+        #preview {
+            max-width: 100%;
+            max-height: 250px;
+            border-radius: 8px;
+            display: none;
+            margin-top: 1rem;
+        }
+
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(26, 26, 46, 0.9);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #e065ff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 1rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            .title {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title">AI Image to Text</h1>
+    <p class="subtitle">Transform your images into text with cutting-edge AI technology</p>
+
+    <div class="container">
+        <div>
+            <h2 class="section-title">Upload an Image</h2>
+            <div class="upload-zone" id="dropZone">
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                <span class="upload-icon">⬆️</span>
+                <p>Click or drag to upload</p>
+                <img id="preview" alt="Preview">
+                <div class="loading" id="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Processing image...</p>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <h2 class="section-title">Generated Text</h2>
+            <div class="result-area">
+                <div class="placeholder-text">Generated text will appear here...</div>
+                <div class="result-text" id="result"></div>
+            </div>
+        </div>
+    </div>
+
+    <button class="try-button" id="convertBtn" disabled>
+        Try it now
+        <span>→</span>
+    </button>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const preview = document.getElementById('preview');
+        const convertBtn = document.getElementById('convertBtn');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+        const placeholder = document.querySelector('.placeholder-text');
+
+        // Handle drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#e065ff';
+            dropZone.style.background = 'rgba(224, 101, 255, 0.1)';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            dropZone.style.background = 'transparent';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            dropZone.style.background = 'transparent';
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        });
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handleFile(file);
+        });
+
+        function handleFile(file) {
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    convertBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            loading.style.display = 'block';
+            convertBtn.disabled = true;
+            result.textContent = '';
+            placeholder.style.display = 'none';
+
+            try {
+                const { data: { text } } = await Tesseract.recognize(
+                    preview.src,
+                    'eng',
+                    { logger: m => console.log(m) }
+                );
+                result.textContent = text;
+            } catch (error) {
+                console.error(error);
+                result.textContent = 'Error converting image to text. Please try again.';
+            } finally {
+                loading.style.display = 'none';
+                convertBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html> 
